@@ -18,6 +18,10 @@ export function BriefcaseIcon({ size }) {
   return <LineIcon size={size}><rect x="3" y="7" width="18" height="12" rx="2" /><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7M3 12h18M10 12v2h4v-2" /></LineIcon>;
 }
 
+export function MicIcon({ size }) {
+  return <LineIcon size={size}><rect x="8.5" y="3" width="7" height="11" rx="3.5" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" /></LineIcon>;
+}
+
 export function ProofJourney() {
   return (
     <div className="proof-journey" role="img" aria-label="A challenge becomes defended work and verified proof">

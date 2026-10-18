@@ -110,6 +110,9 @@ async function structuredAI({ system, user, mock, validate }) {
     ['AI3_BASE_URL', 'AI3_API_KEY', 'AI3_MODEL'],
   ].map(([base, key, model]) => ({ baseUrl: process.env[base], apiKey: process.env[key], model: process.env[model] }))
     .filter((provider) => provider.baseUrl && provider.apiKey && provider.model);
+  // Keep local development usable from a fresh checkout. Production still
+  // requires an explicitly configured provider or AI_FALLBACK_MOCK=1.
+  const localNoProviderFallback = process.env.NODE_ENV !== 'production' && providers.length === 0;
   let lastError;
   for (const provider of providers) {
     try {
@@ -118,7 +121,7 @@ async function structuredAI({ system, user, mock, validate }) {
       lastError = error;
     }
   }
-  if (process.env.AI_FALLBACK_MOCK === '1') return validate(mock());
+  if (process.env.AI_FALLBACK_MOCK === '1' || localNoProviderFallback) return validate(mock());
   throw new Error(lastError?.message || 'No AI provider is configured');
 }
 

@@ -117,6 +117,17 @@ test('seed refuses AI_MOCK-only and remote database configurations', () => {
   assert.doesNotThrow(() => assertSeedSafety({ AI_MOCK: '1', PROVEIT_ENV: 'local', PROVEIT_SEED_CONFIRM: 'LOCAL_DEMO', MONGO_URI: 'mongodb://127.0.0.1:27017/proveit' }));
 });
 
+test('local challenge generation falls back to the demo generator without provider credentials', async () => {
+  const saved = Object.fromEntries(['AI_MOCK', 'AI_FALLBACK_MOCK', 'AI_BASE_URL', 'AI_API_KEY', 'AI_MODEL', 'AI2_BASE_URL', 'AI2_API_KEY', 'AI2_MODEL', 'AI3_BASE_URL', 'AI3_API_KEY', 'AI3_MODEL', 'NODE_ENV'].map((key) => [key, process.env[key]]));
+  for (const key of Object.keys(saved)) delete process.env[key];
+  const result = await (await import('../src/graders.js')).generateChallenge({ mode: 'job', text: 'A local demo role needs a practical data task with clear evidence and a defensible recommendation.' });
+  assert.ok(result.title && result.task && result.rubric.length);
+  for (const [key, value] of Object.entries(saved)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
 test('auth and badge routes keep revoked credentials out of public views', async () => {
   const authSource = await readFile(new URL('../src/routes/auth.js', import.meta.url), 'utf8');
   const leaderboardSource = await readFile(new URL('../src/routes/leaderboard.js', import.meta.url), 'utf8');
@@ -127,6 +138,7 @@ test('auth and badge routes keep revoked credentials out of public views', async
   assert.match(authSource, /role, passwordHash/);
   assert.match(authSource, /signupByIp\.consume/);
   assert.match(authSource, /failedLoginByIdentity\.isBlocked/);
+  assert.match(authSource, /mongoose\.isValidObjectId/);
   assert.match(middlewareSource, /export function requireRole/);
   assert.match(middlewareSource, /getAccountRole\(req\.user\.role\) !== 'startup'/);
   assert.match(middlewareSource, /You do not own this challenge/);

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { Challenge, Submission, User } from '../models.js';
 import { requireUser } from '../middleware.js';
 import { asyncHandler, hashPassword, hashSecret, verifyPassword } from '../util.js';
@@ -97,7 +98,13 @@ router.post('/logout', requireUser, asyncHandler(async (req, res) => {
 
 router.get('/me', requireUser, asyncHandler(async (req, res) => {
   const submissions = await Submission.find({ userId: req.user._id }).sort({ startedAt: -1 }).lean();
-  const challengeIds = [...new Set(submissions.map((submission) => String(submission.challengeId)))];
+  // A legacy/imported submission can contain a missing or malformed challenge
+  // reference. It should not make session restoration fail for the whole app.
+  const challengeIds = [...new Set(
+    submissions
+      .map((submission) => String(submission.challengeId || ''))
+      .filter((challengeId) => mongoose.isValidObjectId(challengeId)),
+  )];
   const challenges = challengeIds.length ? await Challenge.find({ _id: { $in: challengeIds } }).select('title skill').lean() : [];
   const challengeById = new Map(challenges.map((challenge) => [String(challenge._id), challenge]));
   const attempts = submissions.map((submission) => {
