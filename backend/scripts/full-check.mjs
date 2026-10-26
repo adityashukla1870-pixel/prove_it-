@@ -64,6 +64,14 @@ await step(1, 'Founder Mode end to end', async () => {
   } }), 201, 'Create full-check startup account');
   if (account.user?.role !== 'startup' || !account.token) throw new Error(`Startup account was not created: ${JSON.stringify(account)}`);
   state.authToken = account.token;
+  const candidate = expect(await request('POST', '/auth/signup', { body: {
+    name: 'Full Check Candidate',
+    email: `full-check-candidate-${Date.now()}@example.test`,
+    password: 'full-check-password-123',
+    role: 'candidate',
+  } }), 201, 'Create full-check candidate account');
+  if (candidate.user?.role !== 'candidate' || !candidate.token) throw new Error(`Candidate account was not created: ${JSON.stringify(candidate)}`);
+  state.candidateAuthToken = candidate.token;
   const generated = expect(await startupRequest('POST', '/challenges/generate', { body: {
     mode: 'idea',
     text: 'A neighborhood tiffin delivery service for university hostels, connecting students with nearby home cooks through weekly meal subscriptions and simple UPI payments.',
@@ -90,8 +98,10 @@ await step(1, 'Founder Mode end to end', async () => {
 
   const approved = expect(await startupRequest('POST', `/challenges/${state.challengeId}/approve`, { ownerKey: state.ownerKey }), 200, 'Approve Founder Mode challenge');
   if (approved.status !== 'live') throw new Error(`Expected live status: ${JSON.stringify(approved)}`);
-  state.email = `full-check-${Date.now()}@example.test`;
-  const started = expect(await request('POST', `/challenges/${state.challengeId}/start`, { body: { name: 'Full Check Candidate', email: state.email } }), 201, 'Start Founder Mode submission');
+  state.email = candidate.user.email;
+  const anonymousStart = await request('POST', `/challenges/${state.challengeId}/start`, { body: { name: 'Anonymous Candidate', email: `anonymous-${Date.now()}@example.test` } });
+  if (anonymousStart.status !== 401) throw new Error(`Unauthenticated attempt start expected 401, got ${anonymousStart.status}`);
+  const started = expect(await request('POST', `/challenges/${state.challengeId}/start`, { authToken: state.candidateAuthToken, body: { retry: false } }), 201, 'Start Founder Mode submission');
   if (!started.id || !started.candidateToken) throw new Error(`Missing submission id or candidate token: ${JSON.stringify(started)}`);
   state.submissionId = started.id;
   state.candidateToken = started.candidateToken;
@@ -101,19 +111,19 @@ await step(1, 'Founder Mode end to end', async () => {
   if (!persistedSubmission?.candidateTokenHash || persistedSubmission.candidateTokenHash === state.candidateToken) throw new Error('Candidate token was not stored only as a hash');
   const unauthorized = await request('GET', `/submissions/${state.submissionId}`);
   if (unauthorized.status !== 403) throw new Error(`Unauthenticated submission read expected 403, got ${unauthorized.status}`);
-  const duplicate = await request('POST', `/challenges/${state.challengeId}/start`, { body: { name: 'Someone else', email: state.email } });
+  const duplicate = await request('POST', `/challenges/${state.challengeId}/start`, { authToken: state.candidateAuthToken, body: { retry: false } });
   if (duplicate.status !== 409 || duplicate.data.id || duplicate.data.candidateToken) throw new Error(`Duplicate email exposed an attempt: ${JSON.stringify(duplicate)}`);
   state.answer = 'I would begin with two hostels and interview students about meal timing, price, dietary needs, and what makes them renew a subscription. I would onboard a small group of nearby cooks, agree on a limited menu and daily capacity, and run a one-week pilot. Students could order through a simple mobile form and pay with UPI. I would track delivery completion, late orders, refunds, repeat orders, and contribution margin by meal. I would compare the results across weekdays, ask students and cooks what failed, and verify payment records against orders before deciding whether to expand to another hostel.';
   const deniedAnswer = await request('POST', `/submissions/${state.submissionId}/answer`, { body: { answer: state.answer } });
   if (deniedAnswer.status !== 403) throw new Error(`Unauthenticated answer expected 403, got ${deniedAnswer.status}`);
-  const answered = expect(await request('POST', `/submissions/${state.submissionId}/answer`, { candidateToken: state.candidateToken, body: { answer: state.answer } }), 200, 'Submit Founder Mode answer');
+  const answered = expect(await request('POST', `/submissions/${state.submissionId}/answer`, { authToken: state.candidateAuthToken, candidateToken: state.candidateToken, body: { answer: state.answer } }), 200, 'Submit Founder Mode answer');
   if (answered.status !== 'answered' || !Array.isArray(answered.questions) || answered.questions.length < 2 || answered.questions.length > 3) throw new Error(`Expected answered status and 2-3 questions: ${JSON.stringify(answered)}`);
   if (!answered.questions.some((question) => /hostels|students|meal|cooks|subscription/i.test(question))) throw new Error(`Follow-up did not reflect candidate-specific answer details: ${JSON.stringify(answered.questions)}`);
-  const emptyDefense = await request('POST', `/submissions/${state.submissionId}/defend`, { candidateToken: state.candidateToken, body: { answers: answered.questions.map(() => '   ') } });
+  const emptyDefense = await request('POST', `/submissions/${state.submissionId}/defend`, { authToken: state.candidateAuthToken, candidateToken: state.candidateToken, body: { answers: answered.questions.map(() => '   ') } });
   if (emptyDefense.status !== 400) throw new Error(`Empty defense should return HTTP 400, got ${emptyDefense.status}`);
   const unauthorizedDefense = await request('POST', `/submissions/${state.submissionId}/defend`, { body: { answers: answered.questions.map(() => 'A meaningful answer with multiple details and clear reasoning.') } });
   if (unauthorizedDefense.status !== 403) throw new Error(`Unauthenticated defense expected 403, got ${unauthorizedDefense.status}`);
-  const graded = expect(await request('POST', `/submissions/${state.submissionId}/defend`, { candidateToken: state.candidateToken, body: {
+  const graded = expect(await request('POST', `/submissions/${state.submissionId}/defend`, { authToken: state.candidateAuthToken, candidateToken: state.candidateToken, body: {
     answers: answered.questions.map((question, index) => `For follow-up ${index + 1}, I would compare order and payment records, check delivery timing and repeat purchases, speak with students and cooks about exceptions, and repeat the pilot before expanding.`),
   } }), 200, 'Defend Founder Mode answer');
   if (graded.status !== 'graded' || !Number.isFinite(Number(graded.score?.total))) throw new Error(`Expected graded status and numeric score: ${JSON.stringify(graded)}`);
@@ -135,9 +145,9 @@ await step(3, 'Keep draft challenge private', async () => {
   if (!generated.challenge?.id) throw new Error(`Missing draft id: ${JSON.stringify(generated)}`);
   state.draftId = generated.challenge.id;
   const get = await request('GET', `/challenges/${state.draftId}`);
-  const start = await request('POST', `/challenges/${state.draftId}/start`, { body: { name: 'Should not start', email: 'draft@example.test' } });
+  const start = await request('POST', `/challenges/${state.draftId}/start`, { authToken: state.candidateAuthToken, body: { retry: false } });
   if (get.status !== 404 || start.status !== 404) throw new Error(`Expected GET and start to return 404; got GET ${get.status}: ${JSON.stringify(get.data)}, start ${start.status}: ${JSON.stringify(start.data)}`);
-  const expiredAttempt = expect(await request('POST', `/challenges/${state.challengeId}/start`, { body: { name: 'Expired Candidate', email: `expired-${Date.now()}@example.test`, retry: true } }), 201, 'Start deadline test attempt');
+  const expiredAttempt = expect(await request('POST', `/challenges/${state.challengeId}/start`, { authToken: state.candidateAuthToken, body: { retry: true } }), 201, 'Start deadline test attempt');
   await Submission.updateOne({ _id: expiredAttempt.id }, { $set: { deadline: new Date(Date.now() - 1000) } });
   const expiredAnswer = await request('POST', `/submissions/${expiredAttempt.id}/answer`, { candidateToken: expiredAttempt.candidateToken, body: { answer: 'This answer is long enough but the server deadline has passed.' } });
   const expiredState = await request('GET', `/submissions/${expiredAttempt.id}`, { candidateToken: expiredAttempt.candidateToken });
@@ -146,10 +156,14 @@ await step(3, 'Keep draft challenge private', async () => {
 });
 
 await step(4, 'Enforce challenge owner key', async () => {
-  const wrong = await startupRequest('GET', `/challenges/${state.challengeId}/owner`, { ownerKey: 'deliberately-wrong-owner-key' });
-  if (wrong.status !== 403) throw new Error(`Wrong key expected HTTP 403, got ${wrong.status}: ${JSON.stringify(wrong.data)}`);
-  const correctResult = await startupRequest('GET', `/challenges/${state.challengeId}/owner`, { ownerKey: state.ownerKey });
-  const correct = expect(correctResult, 200, 'Get challenge with correct owner key');
+  const other = expect(await request('POST', '/auth/signup', { body: {
+    name: 'Other Full Check Startup', email: `other-startup-${Date.now()}@example.test`, password: 'full-check-password-123', role: 'startup',
+  } }), 201, 'Create second startup account');
+  state.otherStartupAuthToken = other.token;
+  const wrong = await request('GET', `/challenges/${state.challengeId}/owner`, { authToken: other.token });
+  if (wrong.status !== 403) throw new Error(`Other startup expected HTTP 403, got ${wrong.status}: ${JSON.stringify(wrong.data)}`);
+  const correctResult = await startupRequest('GET', `/challenges/${state.challengeId}/owner`);
+  const correct = expect(correctResult, 200, 'Get challenge as its owner without a local key');
   const missing = await request('PUT', `/challenges/${state.challengeId}`, { body: { title: 'No', task: 'No', timeLimitMin: 30, rubric: [], seedQuestions: [] } });
   if (missing.status !== 401) throw new Error(`Missing authentication for edit expected HTTP 401, got ${missing.status}`);
   const legacyKey = 'legacy-owner-key-for-migration-check';
@@ -157,7 +171,7 @@ await step(4, 'Enforce challenge owner key', async () => {
   const migratedResponse = expect(await startupRequest('GET', `/challenges/${legacy.id}/owner`, { ownerKey: legacyKey }), 200, 'Migrate legacy owner key');
   const migrated = await Challenge.findById(legacy.id).select('+ownerKeyHash +ownerKey').lean();
   if (migrated.ownerKey || migrated.ownerKeyHash !== hashSecret(legacyKey) || migratedResponse.ownerKey || migratedResponse.ownerKeyHash) throw new Error('Legacy owner key was not safely migrated and removed');
-  return { wrongKey: wrong.status, correctKey: correctResult.status, challengeId: correct.id, missingKeyEdit: missing.status, legacyMigrated: true };
+  return { otherStartup: wrong.status, owningAccount: correctResult.status, challengeId: correct.id, missingAuthEdit: missing.status, legacyMigrated: true };
 });
 
 await step(5, 'Toggle shortlist twice', async () => {
@@ -223,15 +237,15 @@ await step(7, 'Require owner key for mentor endorsement', async () => {
   const body = { mentorName: 'Full Check Mentor', note: 'Reviewed the candidate’s pilot plan and evidence checks.' };
   const missingKey = await request('POST', `/submissions/${state.submissionId}/mentor`, { body });
   if (missingKey.status !== 401) throw new Error(`Mentor request without authentication expected HTTP 401, got ${missingKey.status}: ${JSON.stringify(missingKey.data)}`);
-  const wrongKey = await startupRequest('POST', `/submissions/${state.submissionId}/mentor`, { ownerKey: 'wrong-owner-key', body });
-  if (wrongKey.status !== 403) throw new Error(`Mentor request with wrong key expected HTTP 403, got ${wrongKey.status}`);
-  const result = expect(await startupRequest('POST', `/submissions/${state.submissionId}/mentor`, { ownerKey: state.ownerKey, body }), 200, 'Endorse submission with owner key');
+  const wrongOwner = await request('POST', `/submissions/${state.submissionId}/mentor`, { authToken: state.otherStartupAuthToken, body });
+  if (wrongOwner.status !== 403) throw new Error(`Mentor request from another startup expected HTTP 403, got ${wrongOwner.status}`);
+  const result = expect(await startupRequest('POST', `/submissions/${state.submissionId}/mentor`, { body }), 200, 'Endorse submission as owning startup');
   if (result.mentor?.name !== body.mentorName || result.mentor?.note !== body.note) throw new Error(`Mentor details missing from response: ${JSON.stringify(result.mentor)}`);
   if (state.badgeId && state.badgePublic) {
     const badge = expect(await request('GET', `/badges/${state.badgeId}`), 200, 'Read endorsed badge');
     if (badge.verified !== true || badge.mentor?.name !== body.mentorName || badge.mentor?.note !== body.note) throw new Error(`Endorsed badge mismatch: ${JSON.stringify(badge)}`);
   }
-  return { missingKey: missingKey.status, mentor: result.mentor, badgeChecked: Boolean(state.badgeId) };
+  return { missingStartupAuth: missingKey.status, otherStartup: wrongOwner.status, mentor: result.mentor, badgeChecked: Boolean(state.badgeId) };
 });
 
 await step(8, 'Request human re-review', async () => {

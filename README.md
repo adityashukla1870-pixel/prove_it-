@@ -107,6 +107,12 @@ Expected response with `AI_MOCK=1`:
 
 The server waits for a successful MongoDB connection before it starts listening. If MongoDB is unavailable, startup reports a `Mongo connection failed` message and exits; the health endpoint will not be available until the database is reachable.
 
+## Admin access
+
+Admin accounts are provisioned through the backend-only `ADMIN_EMAILS` allowlist. Create the operator account through normal signup first, add its exact email to `ADMIN_EMAILS` in `backend/.env`, then restart the API and sign in again. Startup promotes matching existing users and demotes admin accounts removed from the list. Admin cannot be selected at signup.
+
+The read-only `/admin` overview is backed by `GET /api/admin/overview` and supports 7, 30, and 90-day activity windows. It reports aggregate account, challenge, submission, review, and badge-status counts. Dashboard reads are recorded in the `AdminAudit` collection. It does not expose candidate work or contact details; AI mode reports configuration only, not provider uptime.
+
 ## Frontend routes
 
 | Route | Purpose |
@@ -123,6 +129,7 @@ The server waits for a successful MongoDB connection before it starts listening.
 | `/badge/:badgeId` | Public badge verification page |
 | `/profile` | Authenticated profile, statistics, and attempt history |
 | `/leaderboard` | Public opt-in verified-badge rankings |
+| `/admin` | Allowlisted admin-only aggregate monitoring dashboard |
 
 Candidates and startups use the same authentication/session system, but the server-stored role selects the dashboard and API permissions. Existing users without a role are treated as candidates through the controlled schema default, so they are not locked out or promoted to startup accounts. New challenges also store their owning startup user ID; the existing owner key remains required for owner review routes and is stored in browser local storage alongside candidate sessions.
 

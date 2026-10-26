@@ -12,9 +12,10 @@ import Profile from './pages/Profile.jsx';
 import Leaderboard from './pages/Leaderboard.jsx';
 import CandidateDashboard from './pages/CandidateDashboard.jsx';
 import StartupDashboard from './pages/StartupDashboard.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
 import { useAuth } from './lib/auth.jsx';
 import { getAccountRole, roleHome } from './lib/roles.js';
-import { BadgeIcon } from './components/DomainVisuals.jsx';
+import { BrandMark } from './components/DomainVisuals.jsx';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 function ProtectedRoute({ roles, children }) {
@@ -40,7 +41,10 @@ export default function App() {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
 
-  if (authLoading) return <main className="page"><div className="card center" aria-live="polite"><span className="spinner" /> Checking your session…</div></main>;
+  if (authLoading) return <main className="session-skeleton" aria-label="Loading ProveIt" aria-live="polite">
+    <div className="session-skeleton__brand"><i /> <i /></div>
+    <div className="session-skeleton__content"><i /><i /><i /><div><i /><i /></div></div>
+  </main>;
 
   async function signOut() {
     await logout();
@@ -50,9 +54,9 @@ export default function App() {
   return (
     <>
       <header className="nav" style={{ flexWrap: 'wrap' }}>
-        <Link to="/" className="logo" aria-label="ProveIt home"><span className="logo-mark"><BadgeIcon size={16} /></span>Prove<span>It</span></Link>
+        <Link to="/" className="logo" aria-label="ProveIt home"><span className="logo-mark"><BrandMark /></span><span className="logo-word">Prove</span><span className="logo-word-accent">It</span></Link>
         {user && <nav aria-label="Main navigation">
-          {getAccountRole(user) === 'startup' ? <>
+          {getAccountRole(user) === 'admin' ? <NavLink to="/admin">Admin overview</NavLink> : getAccountRole(user) === 'startup' ? <>
             <NavLink to="/startup/dashboard">Dashboard</NavLink>
             <NavLink to="/post">Post a challenge</NavLink>
             <NavLink to="/leaderboard">Leaderboard</NavLink>
@@ -94,6 +98,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Login initialMode="signup" />} />
           <Route path="/profile" element={<ProtectedRoute roles={['candidate', 'startup']}><Profile /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="*" element={<div className="card">Page not found.</div>} />
         </Routes>

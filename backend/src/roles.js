@@ -1,4 +1,5 @@
-export const ACCOUNT_ROLES = Object.freeze(['candidate', 'startup']);
+export const ACCOUNT_ROLES = Object.freeze(['candidate', 'startup', 'admin']);
+export const SIGNUP_ROLES = Object.freeze(['candidate', 'startup']);
 
 // Older users predate the role field. Treat a missing role as candidate so an
 // existing account keeps working without ever becoming a startup account.

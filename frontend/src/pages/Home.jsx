@@ -72,7 +72,7 @@ function StageInterface({ stage }) {
     <div className="home__mini-ui">
       <span className="home__ui-label">Question about your answer</span>
       <strong>What evidence supports that trend?</strong>
-      <p className="home__ui-answer">“I’d compare the same pattern across another time window.”</p>
+      <p className="home__ui-answer">"I'd compare the same pattern across another time window."</p>
       <div className="home__ui-meta"><span>Spoken answer</span><span>Editable transcript</span></div>
     </div>
   );
@@ -80,7 +80,7 @@ function StageInterface({ stage }) {
     <div className="home__mini-ui">
       <span className="home__ui-label">Example rubric score</span>
       <div className="home__score-row"><strong>Data reasoning</strong><strong>26 / 30</strong></div>
-      <p className="home__ui-answer">“Compare the same pattern across another time window.”</p>
+      <p className="home__ui-answer">"Compare the same pattern across another time window."</p>
       <div className="home__ui-meta"><span>Criterion evidence</span><span>Human review available</span></div>
     </div>
   );
@@ -113,6 +113,8 @@ export default function Home() {
     }, (context) => {
       const { reduce, desktop } = context.conditions;
       if (reduce) return undefined;
+
+      /* Scrubbing text reveals on the Responsible AI section */
       const words = gsap.utils.toArray('[data-scrub-word]', root);
       if (words.length) {
         gsap.fromTo(words, { opacity: 0.18 }, {
@@ -122,6 +124,53 @@ export default function Home() {
           scrollTrigger: { trigger: '.home__responsible', start: 'top 72%', end: 'center 42%', scrub: true },
         });
       }
+
+      /* Card stacking: process stage cards stack on scroll */
+      const stageCards = gsap.utils.toArray('.home__stage', root);
+      if (stageCards.length) {
+        stageCards.forEach((card, i) => {
+          gsap.fromTo(card,
+            { opacity: 0.3, scale: 0.92, y: 60 },
+            {
+              opacity: 1, scale: 1, y: 0,
+              ease: 'power2.out',
+              scrollTrigger: {
+                trigger: card,
+                start: 'top 85%',
+                end: 'top 55%',
+                scrub: true,
+              },
+            }
+          );
+        });
+      }
+
+      /* Image scale & fade on the receipt card */
+      const receiptEl = root.querySelector('.home__receipt');
+      if (receiptEl) {
+        gsap.fromTo(receiptEl,
+          { scale: 0.88, opacity: 0.4 },
+          {
+            scale: 1, opacity: 1,
+            ease: 'power2.out',
+            scrollTrigger: { trigger: '.home__hero', start: 'top 80%', end: 'top 20%', scrub: true },
+          }
+        );
+      }
+
+      /* Audience detail fade-in */
+      const audienceDetail = root.querySelector('.home__audience-detail');
+      if (audienceDetail) {
+        gsap.fromTo(audienceDetail,
+          { opacity: 0.2, y: 40 },
+          {
+            opacity: 1, y: 0,
+            ease: 'power2.out',
+            scrollTrigger: { trigger: '.home__audience', start: 'top 70%', end: 'top 30%', scrub: true },
+          }
+        );
+      }
+
       if (desktop) {
         ScrollTrigger.create({
           trigger: '.home__process',
@@ -145,8 +194,11 @@ export default function Home() {
     <div className="home" ref={homeRef}>
       <section className="home__hero">
         <div className="home__hero-copy">
-          <h1><span>Show the work <span className="home__headline-art" aria-hidden="true"><svg viewBox="0 0 72 38"><path d="M5 29 20 19l12 5 14-14 20 7" /><circle cx="46" cy="10" r="3" /></svg></span></span><span>Defend it.</span></h1>
-          <p>Anyone can get an AI to write an answer. ProveIt finds the people who can defend it.</p>
+          <h1>
+            <span>Show the work.</span>
+            <span>Defend it.</span>
+          </h1>
+          <p>Turn practical challenges and spoken follow-ups into evidence of skill that teams can verify.</p>
           <div className="home__actions">
             <Link className="home__button" to="/register">Create your account</Link>
             <Link className="home__text-link" to="/login">Log in</Link>
@@ -175,7 +227,7 @@ export default function Home() {
 
       <section className="home__process" id="how-it-works" aria-label="How ProveIt works">
         <div className="home__process-aside">
-          <span className="home__eyebrow">A clearer way to hire</span>
+          <span className="home__eyebrow">From real work to a verified result</span>
           <h2>From task<br />to badge.</h2>
           <p>See how a real piece of work becomes a result candidates can explain and teams can verify.</p>
         </div>
@@ -187,7 +239,10 @@ export default function Home() {
           { id: 'badge', title: 'Get verified', copy: 'A signed badge anyone can check with a link or QR code.' },
           ].map((item, index) => (
             <article className={`home__stage home__stage--${index + 1}`} key={item.id}>
-              <div className="home__stage-heading"><h3>{item.title}</h3><span>{item.copy}</span></div>
+              <div className="home__stage-heading">
+                <h3>{item.title}</h3>
+                <span>{item.copy}</span>
+              </div>
               <div className="home__stage-ui"><StageInterface stage={item.id} /></div>
             </article>
           ))}
@@ -199,9 +254,8 @@ export default function Home() {
           <span className="home__eyebrow">Built for real work</span>
           <h2>One proof format.<br />Different goals.</h2>
           <div className="home__carousel-controls">
-            <button type="button" aria-label="Previous audience" onClick={() => moveAudience(-1)}>←</button>
-            <span aria-live="polite">{String(audienceIndex + 1).padStart(2, '0')} / {String(audiences.length).padStart(2, '0')}</span>
-            <button type="button" aria-label="Next audience" onClick={() => moveAudience(1)}>→</button>
+            <button type="button" aria-label="Previous audience" onClick={() => moveAudience(-1)}>&larr;</button>
+            <button type="button" aria-label="Next audience" onClick={() => moveAudience(1)}>&rarr;</button>
           </div>
         </div>
         <div className="home__audience-detail" aria-live="polite">
@@ -222,8 +276,8 @@ export default function Home() {
           <div className="home__review-ui">
             <span className="home__ui-label">Example evidence you can inspect</span>
             <strong>Reasoning and trade-offs</strong>
-            <p>Evidence from the candidate’s answer</p>
-            <blockquote>“I would test the same pattern on another time window.”</blockquote>
+            <p>Evidence from the candidate's answer</p>
+            <blockquote>"I would test the same pattern on another time window."</blockquote>
             <span className="home__review-status">Human re-review available</span>
           </div>
         </div>
@@ -240,10 +294,10 @@ export default function Home() {
         </div>
         <div className="home__close-ui">
           <div className="home__create-ui">
-            <span className="home__ui-label">First, choose what you’re building</span>
+            <span className="home__ui-label">First, choose what you're building</span>
             <h3>Real work. Clear proof.</h3>
             <div className="home__create-choices" aria-label="Challenge type examples">
-              <span>I’m hiring</span>
+              <span>I'm hiring</span>
               <span>I have an idea</span>
             </div>
             <p>Both paths are grounded in practical tasks, thoughtful defence, and evidence-led results.</p>

@@ -2,6 +2,14 @@ function LineIcon({ children, size = 24 }) {
   return <svg className="domain-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
 }
 
+export function BrandMark() {
+  return <svg className="brand-mark__svg" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <path d="M9 4.75h9.25L24 10.5v16.75a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-20a2.5 2.5 0 0 1 2-2.5Z" stroke="currentColor" strokeWidth="2.1" strokeLinejoin="round" />
+    <path d="M18 5v5.5h5.5M11.5 14h6.25a3 3 0 1 1 0 6H11.5m0-6v10" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="m19 24.25 2 2 4-4.5" stroke="var(--brand-mark-check,#D88A58)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>;
+}
+
 export function ChallengeIcon({ size }) {
   return <LineIcon size={size}><path d="M5 4.8h14v14.4H5z" /><path d="M8.5 9h7M8.5 12h7M8.5 15h4" /></LineIcon>;
 }

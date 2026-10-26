@@ -146,3 +146,26 @@ test('auth and badge routes keep revoked credentials out of public views', async
   assert.match(challengeSource, /ownerUserId: req\.user\._id/);
   assert.match(leaderboardSource, /isPubliclyValidBadge\(submission\)/);
 });
+
+test('account roles are persisted and backend routes enforce candidate and startup access', async () => {
+  const modelSource = await readFile(new URL('../src/models.js', import.meta.url), 'utf8');
+  const authSource = await readFile(new URL('../src/routes/auth.js', import.meta.url), 'utf8');
+  const middlewareSource = await readFile(new URL('../src/middleware.js', import.meta.url), 'utf8');
+  const challengeSource = await readFile(new URL('../src/routes/challenges.js', import.meta.url), 'utf8');
+  const submissionSource = await readFile(new URL('../src/routes/submissions.js', import.meta.url), 'utf8');
+  const serverSource = await readFile(new URL('../src/server.js', import.meta.url), 'utf8');
+  assert.match(modelSource, /role:\s*\{ type: String, enum: \['candidate', 'startup'\], default: 'candidate' \}/);
+  assert.match(modelSource, /ownerUserId: \{ type: Schema\.Types\.ObjectId, ref: 'User'/);
+  assert.match(authSource, /ACCOUNT_ROLES\.includes\(role\)/);
+  assert.match(authSource, /new User\(\{ name, email, role,/);
+  assert.match(middlewareSource, /export function requireRole/);
+  assert.match(middlewareSource, /getAccountRole\(req\.user\.role\) !== 'startup'/);
+  assert.match(middlewareSource, /if \(req\.challenge\.ownerUserId\) \{[\s\S]*?return next\(\)/);
+  assert.match(middlewareSource, /const allowed = req\.user && req\.submission\.userId \? validUser : validToken/);
+  assert.match(challengeSource, /router\.post\('\/generate', requireRole\('startup'\)/);
+  assert.match(challengeSource, /router\.get\('\/mine', requireRole\('startup'\)/);
+  assert.match(challengeSource, /router\.post\('\/:id\/start', requireRole\('candidate'\)/);
+  assert.match(challengeSource, /ownerUserId: req\.user\._id/);
+  assert.match(submissionSource, /requireOwnerOfSubmission/);
+  assert.match(serverSource, /role: \{ \$exists: false \}.*'candidate'/s);
+});

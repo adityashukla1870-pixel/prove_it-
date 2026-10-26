@@ -16,7 +16,7 @@ export default function Review() {
   const navigate = useNavigate();
   const key = getOwnerKey(id);
   const { data, loading, error: loadError } = useAsync(
-    () => key ? api.getChallengeOwner(id, key) : Promise.reject(new Error('Open this page in the browser where you created the challenge.')),
+    () => api.getChallengeOwner(id, key),
     [id],
   );
   const [form, setForm] = useState({ title: '', task: '', timeLimitMin: 30, rubric: [], seedQuestions: [] });
@@ -80,7 +80,6 @@ export default function Review() {
     }
   }
 
-  if (!key) return <div className="error" role="alert">Open this page in the browser where you created the challenge.</div>;
   if (loading && (!data || data.id !== id)) return <div className="card center"><span className="spinner" /></div>;
   if (loadError && (!data || data.id !== id)) return <div className="error" role="alert">{loadError}</div>;
   if (!data || data.id !== id) return null;

@@ -39,7 +39,18 @@ export default function Solve() {
         const item = await api.getChallenge(id);
         if (!active) return;
         setChallenge(item);
-        const session = !retry && getSession(id);
+        let session = !retry && getSession(id);
+        if (!session && !retry && user) {
+          try {
+            const account = await api.me();
+            const attempt = (account.attempts || []).find((entry) => entry.challengeId === id);
+            if (attempt) {
+              session = { sid: attempt.submissionId, name: user.name, email: user.email };
+              saveSession(id, session);
+            }
+          } catch { /* A new attempt can still be started if account history is unavailable. */ }
+          if (!active) return;
+        }
         if (!session) {
           setStep('intro');
           return;
@@ -70,7 +81,7 @@ export default function Solve() {
     }
     load();
     return () => { active = false; };
-  }, [id, navigate, retry]);
+  }, [id, navigate, retry, user?.id]);
 
   async function start(event) {
     event.preventDefault();

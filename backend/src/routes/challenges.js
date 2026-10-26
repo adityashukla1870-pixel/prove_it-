@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { Challenge, Submission } from '../models.js';
-import { optionalUser, requireOwner, requireRole } from '../middleware.js';
-import { getAccountRole } from '../roles.js';
+import { requireOwner, requireRole } from '../middleware.js';
 import { asyncHandler } from '../util.js';
 import { generateChallenge } from '../graders.js';
 import crypto from 'crypto';
@@ -138,8 +137,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/:id/start', optionalUser, asyncHandler(async (req, res) => {
-  if (req.user && getAccountRole(req.user.role) !== 'candidate') return res.status(403).json({ error: 'Candidate account required' });
+router.post('/:id/start', requireRole('candidate'), asyncHandler(async (req, res) => {
   const challenge = await Challenge.findById(req.params.id).catch(() => null);
   if (!challenge || challenge.status !== 'live') return res.status(404).json({ error: 'Challenge not found or not published' });
   const { retry = false } = req.body || {};

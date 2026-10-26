@@ -7,8 +7,10 @@ import submissions from './routes/submissions.js';
 import badges from './routes/badges.js';
 import auth from './routes/auth.js';
 import leaderboard from './routes/leaderboard.js';
-import { Challenge } from './models.js';
+import { Challenge, User } from './models.js';
 import { hashSecret } from './util.js';
+import { configuredAdminEmails } from './middleware.js';
+import admin from './routes/admin.js';
 
 const app = express();
 app.use(cors());
@@ -20,6 +22,7 @@ app.use('/api/submissions', submissions);
 app.use('/api/badges', badges);
 app.use('/api/auth', auth);
 app.use('/api/leaderboard', leaderboard);
+app.use('/api/admin', admin);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
@@ -31,6 +34,11 @@ const port = process.env.PORT || 5000;
 mongoose
   .connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/proveit')
   .then(async () => {
+    // Accounts created before roles were introduced were candidate accounts; migrate them to the least-privileged role.
+    await User.updateMany({ role: { $exists: false } }, { $set: { role: 'candidate' } });
+    const adminEmails = configuredAdminEmails();
+    await User.updateMany({ email: { $in: adminEmails } }, { $set: { role: 'admin' } });
+    await User.updateMany({ role: 'admin', email: { $nin: adminEmails } }, { $set: { role: 'candidate' } });
     const legacy = await Challenge.find({ ownerKey: { $type: 'string' } }).select('+ownerKey +ownerKeyHash');
     for (const challenge of legacy) {
       if (!challenge.ownerKeyHash) challenge.ownerKeyHash = hashSecret(challenge.ownerKey);

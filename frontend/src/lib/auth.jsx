@@ -31,7 +31,7 @@ export function AuthProvider({ children }) {
         } else {
           // A temporary network/database outage must not erase a session that
           // has not been proven invalid.
-          setUser(cachedUser);
+          setUser(cachedUser ? { ...cachedUser, role: cachedUser.role || 'candidate' } : null);
           setSessionError('We could not validate your session right now.');
         }
       })

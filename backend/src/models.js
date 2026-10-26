@@ -24,6 +24,7 @@ const challengeSchema = new Schema(
   },
   { timestamps: true },
 );
+challengeSchema.index({ status: 1, createdAt: -1 });
 
 const submissionSchema = new Schema(
   {
@@ -53,6 +54,10 @@ const submissionSchema = new Schema(
   },
   { timestamps: true },
 );
+submissionSchema.index({ createdAt: -1, status: 1 });
+submissionSchema.index({ status: 1, rereviewRequested: 1 });
+submissionSchema.index({ status: 1, 'score.flagged': 1 });
+submissionSchema.index({ badgeStatus: 1, badgeId: 1 });
 
 const userSchema = new Schema(
   {
@@ -66,12 +71,30 @@ const userSchema = new Schema(
     bio: { type: String, default: '' },
     linkedin: { type: String, default: '' },
     github: { type: String, default: '' },
-    role: { type: String, enum: ['candidate', 'startup'], default: 'candidate' },
+    role: { type: String, enum: ['candidate', 'startup', 'admin'], default: 'candidate' },
     showOnLeaderboard: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
+userSchema.index({ role: 1, createdAt: -1 });
+
+const adminAuditSchema = new Schema({
+  actorId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  action: { type: String, required: true },
+  details: { days: { type: Number } },
+}, { timestamps: { createdAt: true, updatedAt: false } });
+adminAuditSchema.index({ createdAt: -1 });
+adminAuditSchema.pre('save', function preventAuditRewrite(next) {
+  if (!this.isNew) return next(new Error('Admin audit records are append-only'));
+  next();
+});
+for (const operation of ['updateOne', 'updateMany', 'findOneAndUpdate', 'deleteOne', 'deleteMany', 'findOneAndDelete']) {
+  adminAuditSchema.pre(operation, function preventAuditMutation() {
+    throw new Error('Admin audit records are append-only');
+  });
+}
 
 export const Challenge = mongoose.models.Challenge || mongoose.model('Challenge', challengeSchema);
 export const Submission = mongoose.models.Submission || mongoose.model('Submission', submissionSchema);
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
+export const AdminAudit = mongoose.models.AdminAudit || mongoose.model('AdminAudit', adminAuditSchema);

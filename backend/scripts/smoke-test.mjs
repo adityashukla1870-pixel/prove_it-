@@ -48,6 +48,11 @@ await step(1, 'Generate challenge', async () => {
   });
   if (account.user?.role !== 'startup' || !account.token) throw new Error(`Startup account was not created: ${JSON.stringify(account)}`);
   state.authToken = account.token;
+  const candidate = await request('POST', '/auth/signup', {
+    body: { name: 'Smoke Candidate', email: `smoke-candidate-${Date.now()}@example.test`, password: 'smoke-password-123', role: 'candidate' },
+  });
+  if (candidate.user?.role !== 'candidate' || !candidate.token) throw new Error(`Candidate account was not created: ${JSON.stringify(candidate)}`);
+  state.candidateAuthToken = candidate.token;
   const result = await request('POST', '/challenges/generate', {
     authToken: state.authToken,
     body: {
@@ -92,22 +97,24 @@ await step(3, 'Approve challenge', async () => {
 });
 
 await step(4, 'Start submission', async () => {
-  state.email = `smoke-${Date.now()}@example.test`;
+  const anonymous = await fetch(`${baseUrl}/api/challenges/${state.id}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Anonymous Candidate', email: `anonymous-${Date.now()}@example.test` }) });
+  if (anonymous.status !== 401) throw new Error(`Unauthenticated attempt start expected 401, got ${anonymous.status}`);
   const result = await request('POST', `/challenges/${state.id}/start`, {
-    body: { name: 'Smoke Candidate', email: state.email },
+    authToken: state.candidateAuthToken,
+    body: { retry: false },
   });
   if (!result.id || !result.candidateToken || result.candidateTokenHash) throw new Error(`Missing submission id/token or leaked token hash: ${JSON.stringify(result)}`);
   state.submissionId = result.id;
   state.candidateToken = result.candidateToken;
   const unauthorized = await fetch(`${baseUrl}/api/submissions/${state.submissionId}`);
   if (unauthorized.status !== 403) throw new Error(`Unauthenticated submission read expected 403, got ${unauthorized.status}`);
-  const duplicate = await fetch(`${baseUrl}/api/challenges/${state.id}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Other person', email: state.email }) });
+  const duplicate = await fetch(`${baseUrl}/api/challenges/${state.id}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.candidateAuthToken}` }, body: JSON.stringify({ retry: false }) });
   const duplicateData = await duplicate.json();
   if (duplicate.status !== 409 || duplicateData.id || duplicateData.candidateToken) throw new Error(`Existing email was not safely rejected: ${duplicate.status} ${JSON.stringify(duplicateData)}`);
   const missing = await fetch(`${baseUrl}/api/submissions/not-a-real-id`);
   const missingData = await missing.json();
   if (missing.status !== 404 || typeof missingData.error !== 'string') throw new Error(`Missing-record error was not a JSON 404: ${missing.status} ${JSON.stringify(missingData)}`);
-  return { id: result.id, status: result.status, unauthenticatedRead: unauthorized.status, duplicateAttempt: duplicate.status };
+  return { id: result.id, status: result.status, unauthenticatedStart: anonymous.status, unauthenticatedRead: unauthorized.status, duplicateAttempt: duplicate.status };
 });
 
 await step(5, 'Submit answer and get follow-ups', async () => {
@@ -116,6 +123,7 @@ await step(5, 'Submit answer and get follow-ups', async () => {
   state.answer = 'I would first validate the weekly sales data for missing values and duplicate orders, then compare revenue by product and acquisition channel. I would use SQL to group comparable weeks, check the effect of promotions, and identify whether one category explains the change. I would put the clearest trend into a short spreadsheet chart, note the sample size, and compare the result against the source report. Before recommending action, I would ask the founders whether inventory, pricing, or a campaign changed during that period. I would then test the same pattern on another time window to see if it repeats and document any assumptions.';
   const result = await request('POST', `/submissions/${state.submissionId}/answer`, {
     candidateToken: state.candidateToken,
+    authToken: state.candidateAuthToken,
     body: { answer: state.answer },
   });
   if (result.status !== 'answered' || !Array.isArray(result.questions) || result.questions.length < 2 || result.questions.length > 3) {
@@ -130,6 +138,7 @@ await step(6, 'Defend answers and grade', async () => {
   if (empty.status !== 400) throw new Error(`Empty defense expected 400, got ${empty.status}`);
   const result = await request('POST', `/submissions/${state.submissionId}/defend`, {
     candidateToken: state.candidateToken,
+    authToken: state.candidateAuthToken,
     body: { answers: state.questions.map((question, index) => `For question ${index + 1}, I would compare the SQL output to the source records, check whether promotions or inventory changed, and repeat the analysis on another week before recommending a decision.`) },
   });
   if (result.status !== 'graded' || !Number.isFinite(Number(result.score?.total))) throw new Error(`Expected graded status and numeric score: ${JSON.stringify(result)}`);
